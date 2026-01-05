@@ -524,7 +524,7 @@ update_stats() {
     
     # Collect current GPU metrics
     local timestamp=$(date '+%m-%d %H:%M:%S')
-    local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw \
+    local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw,fan.speed \
                      --format=csv,noheader,nounits 2>/dev/null)
     
     if [[ -n "$gpu_stats" ]]; then
@@ -551,7 +551,8 @@ update_stats() {
         local temp=$(echo "$gpu_stats" | cut -d',' -f1 | tr -d ' ')
         local util=$(echo "$gpu_stats" | cut -d',' -f2 | tr -d ' ')
         local mem=$(echo "$gpu_stats" | cut -d',' -f3 | tr -d ' ')
-        local power=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' []')
+        local fan=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' ')
+        local power=$(echo "$gpu_stats" | cut -d',' -f5 | tr -d ' []')
 
         # Handle N/A power value
         if [[ "$power" == "N/A" || -z "$power" || "$power" == "[N/A]" ]]; then
@@ -565,7 +566,8 @@ update_stats() {
     "temperature": $temp,
     "utilization": $util,
     "memory": $mem,
-    "power": $power
+    "power": $power,
+    "fan": $fan
 }
 EOF
 )
