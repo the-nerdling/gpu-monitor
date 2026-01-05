@@ -97,7 +97,9 @@ function initialize_database() {
         temperature REAL NOT NULL,
         utilization REAL NOT NULL,
         memory REAL NOT NULL,
+        fan REAL NOT NULL
         power REAL NOT NULL
+    
     );
     
     CREATE INDEX IF NOT EXISTS idx_gpu_metrics_timestamp_epoch ON gpu_metrics(timestamp_epoch);
@@ -110,10 +112,11 @@ function initialize_database() {
             'temperatures', json_group_array(temperature),
             'utilizations', json_group_array(utilization),
             'memory', json_group_array(memory),
+            'fan', json_group_array(fan),
             'power', json_group_array(power)
         ) AS json_data
     FROM (
-        SELECT timestamp, temperature, utilization, memory, power
+        SELECT timestamp, temperature, utilization, memory, fan, power
         FROM gpu_metrics
         WHERE timestamp_epoch > (strftime('%s', 'now') - 86400)
         ORDER BY timestamp_epoch ASC
@@ -170,6 +173,7 @@ def export_history_json(db_path, output_path):
             "temperatures": [],
             "utilizations": [],
             "memory": [],
+            "fan": [],
             "power": []
         }
         
@@ -179,6 +183,7 @@ def export_history_json(db_path, output_path):
             result["temperatures"].append(row["temperature"])
             result["utilizations"].append(row["utilization"])
             result["memory"].append(row["memory"])
+            result["fan"].append(row["fan"])
             result["power"].append(row["power"])
         
         # Create temp file first
@@ -246,6 +251,8 @@ def get_24hr_stats(db_path):
                 MAX(utilization) as util_max,
                 MIN(memory) as mem_min,
                 MAX(memory) as mem_max,
+                MIN(fan) as fan_min,
+                MAX(fan) as fan_max,
                 MIN(CASE WHEN power > 0 THEN power ELSE NULL END) as power_min,
                 MAX(power) as power_max
             FROM gpu_metrics
@@ -264,6 +271,8 @@ def get_24hr_stats(db_path):
             util_max = row['util_max']
             mem_min = row['mem_min']
             mem_max = row['mem_max']
+            fan_min = row['fan_min']
+            fan_max = row['fan_max']
             power_min = row['power_min'] if row['power_min'] is not None else 0
             power_max = row['power_max'] if row['power_max'] is not None else 0
         
@@ -273,6 +282,7 @@ def get_24hr_stats(db_path):
                 "temperature": {"min": temp_min, "max": temp_max},
                 "utilization": {"min": util_min, "max": util_max},
                 "memory": {"min": mem_min, "max": mem_max},
+                "fan": {"min": fan_min, "max": fan_max},
                 "power": {"min": power_min, "max": power_max}
             }
         }
@@ -284,6 +294,7 @@ def get_24hr_stats(db_path):
             "temperature": {"min": 0, "max": 0},
             "utilization": {"min": 0, "max": 0},
             "memory": {"min": 0, "max": 0},
+            "fan": {"min": 0, "max": 0},
             "power": {"min": 0, "max": 0}
         }})
     finally:
@@ -433,8 +444,8 @@ def process_buffer(db_path, buffer_lines):
         # Prepare statement for insertion
         stmt = '''
             INSERT INTO gpu_metrics 
-            (timestamp, timestamp_epoch, temperature, utilization, memory, power)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (timestamp, timestamp_epoch, temperature, utilization, memoryn, fan, power)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         '''
         
         for line in buffer_lines:
@@ -450,10 +461,11 @@ def process_buffer(db_path, buffer_lines):
             temperature = float(parts[1])
             utilization = float(parts[2])
             memory = float(parts[3])
+            fan = float(parts[4])
             
             # Handle N/A power values
             try:
-                power = float(parts[4]) if parts[4].strip() != 'N/A' else 0
+                power = float(parts[5]) if parts[5].strip() != 'N/A' else 0
             except (ValueError, AttributeError):
                 power = 0
             
@@ -524,7 +536,7 @@ update_stats() {
     
     # Collect current GPU metrics
     local timestamp=$(date '+%m-%d %H:%M:%S')
-    local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw,fan.speed \
+    local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,fan.speed,power.draw \
                      --format=csv,noheader,nounits 2>/dev/null)
     
     if [[ -n "$gpu_stats" ]]; then
@@ -566,8 +578,8 @@ update_stats() {
     "temperature": $temp,
     "utilization": $util,
     "memory": $mem,
-    "power": $power,
-    "fan": $fan
+    "fan": $fan,
+    "power": $power
 }
 EOF
 )
