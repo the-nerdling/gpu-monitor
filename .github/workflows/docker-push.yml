@@ -29,5 +29,5 @@ jobs:
           push: true
           # Replace 'yourusername' with your actual Docker Hub username
           tags: |
-            yourusername/gpu-monitor:latest
-            yourusername/gpu-monitor:${{ github.run_number }}
+            thenerdling/gpu-monitor:latest
+            thenerdling/gpu-monitor:${{ github.run_number }}
